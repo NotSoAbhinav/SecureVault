@@ -1,0 +1,11 @@
+{
+  "original": "examples\\sample.jpg",
+  "metadata_removed": [],
+  "original_sha256": "cf0b8f5d55a8fc762bcbcabed281d3060faf73d82e5c28f72257659749391285",
+  "cleaned_sha256": "78be81e9f1238a74cc60b38694caf271df862a7e0b1570a192ddd5a7a65a5d4d",
+  "encrypted_sha256": "a22bf06a92ee2ada040491ddfb4a7d659f1133142ee364b10c1e45804be4cdb6",
+  "vault_path": "D:\\Codes\\SecureVault\\vault_store\\sample.jpg.vault",
+  "timestamp": "2025-11-17T19:27:05.378284Z",
+  "salt": "b3GaAvDKtJLIHsWH6cg1qg==",
+  "nonce": "OUq7ioileww+xreF"
+}
