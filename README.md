@@ -9,11 +9,12 @@
 - Key-derivation (PBKDF2) and AES-256-GCM encryption
 - Integrity verification (SHA-256)
 - SQLite vault index + exportable JSON/PDF report
-- CLI prototype — GUI planned
+- CLI prototype 
+- GUI planned (In-Progress)
 
 ## Tech stack
 - Python 3.10+
-- cryptography, Pillow, piexif, pikepdf / PyPDF2 (optional)
+- cryptography, Pillow, piexif, pikepdf / PyPDF2 (Planed)
 - SQLite (built-in)
 - pytest for tests
 
