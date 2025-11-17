@@ -1,257 +1,195 @@
-# gui_db_viewer.py
+import threading
+import pathlib
+import tkinter as tk
+from tkinter import ttk, filedialog, simpledialog, messagebox
+from PIL import Image, ImageTk
+import traceback
 import sys
-import csv
-import json
-import sqlite3
-from pathlib import Path
-from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QLineEdit, QTextEdit, QFileDialog, QMessageBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QSplitter
-)
-from PySide6.QtCore import Qt
+import io
+
+# Import your orchestrator (uses your project code)
 from core.orchestrator import Orchestrator
-from core.storage_manager import StorageManager
 
-PROJECT_ROOT = Path(__file__).resolve().parent
 
-class DBViewer(QWidget):
-    def __init__(self):
-        super().__init__()
-        self.setWindowTitle("Secure File Vault — DB Viewer")
-        self.setMinimumSize(900, 560)
+class Redirector(io.TextIOBase):
+    """Helper to capture prints and write them into a tkinter Text widget."""
+    def __init__(self, write_fn):
+        self.write_fn = write_fn
 
-        self.orch = Orchestrator()               # re-uses existing orchestrator
-        self.storage = self.orch.storage         # access storage manager for db path
+    def write(self, s):
+        if s:
+            self.write_fn(s)
 
-        layout = QVBoxLayout()
-        self.setLayout(layout)
+    def flush(self):
+        pass
 
-        # Top control row
-        row = QHBoxLayout()
-        self.btn_refresh = QPushButton("Refresh Table")
-        self.btn_refresh.clicked.connect(self.load_table)
-        self.btn_export_csv = QPushButton("Export CSV")
-        self.btn_export_csv.clicked.connect(self.export_csv)
-        self.btn_export_report = QPushButton("Export Selected Report JSON")
-        self.btn_export_report.clicked.connect(self.export_selected_report)
-        self.btn_restore = QPushButton("Restore Selected")
-        self.btn_restore.clicked.connect(self.restore_selected)
-        self.btn_delete = QPushButton("Delete Selected")
-        self.btn_delete.clicked.connect(self.delete_selected)
 
-        row.addWidget(self.btn_refresh)
-        row.addWidget(self.btn_export_csv)
-        row.addWidget(self.btn_export_report)
-        row.addWidget(self.btn_restore)
-        row.addWidget(self.btn_delete)
-        row.addStretch()
-        layout.addLayout(row)
+class SecureVaultGUI(ttk.Frame):
+    def __init__(self, master=None):
+        super().__init__(master)
+        self.master = master
+        self.master.title("SecureVault — GUI")
+        self.pack(fill="both", expand=True)
+        self.orch = Orchestrator()  # uses default db path (or your logic)
 
-        # Table widget
-        self.table = QTableWidget()
-        self.table.setColumnCount(6)
-        self.table.setHorizontalHeaderLabels([
-            "ID", "Original Name", "Encrypted Name", "Original SHA256",
-            "Cleaned SHA256", "Timestamp"
-        ])
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.setSelectionBehavior(self.table.SelectRows)
-        self.table.setSelectionMode(self.table.SingleSelection)
-        layout.addWidget(self.table, 8)
+        self.selected_path: pathlib.Path | None = None
+        self.preview_image = None  # keep reference to avoid GC
+        self._build_ui()
 
-        # Details + Console
-        bottom = QHBoxLayout()
-        self.details = QTextEdit()
-        self.details.setReadOnly(True)
-        bottom.addWidget(self.details, 2)
+    def _build_ui(self):
+        # Top frame: file selection + preview
+        top = ttk.Frame(self)
+        top.pack(fill="x", padx=8, pady=6)
 
-        right_col = QVBoxLayout()
-        self.lbl_dbpath = QLabel(f"DB: {str(self.storage.db_path)}")
-        right_col.addWidget(self.lbl_dbpath)
-        self.btn_open_db = QPushButton("Open DB in DB Browser (if installed)")
-        self.btn_open_db.clicked.connect(self.open_in_db_browser)
-        right_col.addWidget(self.btn_open_db)
-        right_col.addStretch()
-        bottom.addLayout(right_col, 1)
+        btn_frame = ttk.Frame(top)
+        btn_frame.pack(side="left", anchor="n")
 
-        layout.addLayout(bottom, 3)
+        ttk.Button(btn_frame, text="Select File", command=self.select_file).pack(fill="x", pady=2)
+        ttk.Button(btn_frame, text="Select Folder", command=self.select_folder).pack(fill="x", pady=2)
+        ttk.Separator(btn_frame, orient="horizontal").pack(fill="x", pady=6)
+        ttk.Button(btn_frame, text="Ingest (Encrypt & Store)", command=self.ingest_prompt).pack(fill="x", pady=2)
+        ttk.Button(btn_frame, text="Restore by ID", command=self.restore_prompt).pack(fill="x", pady=2)
+        ttk.Button(btn_frame, text="Open Reports Folder", command=self.open_reports).pack(fill="x", pady=2)
 
-        # connect table selection
-        self.table.itemSelectionChanged.connect(self.on_selection_change)
+        # Preview area
+        preview_frame = ttk.LabelFrame(top, text="Preview")
+        preview_frame.pack(side="left", padx=8, pady=2, fill="both", expand=True)
 
-        # initial load
-        self.load_table()
+        self.preview_label = ttk.Label(preview_frame, text="No file selected", anchor="center")
+        self.preview_label.pack(fill="both", expand=True, padx=6, pady=6)
 
-    def _connect(self):
-        return sqlite3.connect(str(self.storage.db_path))
+        # Bottom: status / console output
+        out_frame = ttk.LabelFrame(self, text="Status / Output")
+        out_frame.pack(fill="both", expand=True, padx=8, pady=6)
 
-    def load_table(self):
+        self.text = tk.Text(out_frame, height=12, state="disabled", wrap="word")
+        self.text.pack(fill="both", expand=True, padx=4, pady=4)
+
+        # Redirect stdout/stderr into the text widget while GUI is open
+        self._orig_stdout = sys.stdout
+        self._orig_stderr = sys.stderr
+        sys.stdout = Redirector(self._append_text)
+        sys.stderr = Redirector(self._append_text)
+
+    def _append_text(self, s: str):
+        # Called in main thread only — but prints from worker threads will also call this.
+        def _do():
+            self.text.config(state="normal")
+            self.text.insert("end", s)
+            self.text.see("end")
+            self.text.config(state="disabled")
         try:
-            conn = self._connect()
-            cur = conn.cursor()
-            cur.execute("SELECT id, original_name, encrypted_name, original_sha256, cleaned_sha256, timestamp FROM vault_files ORDER BY id DESC")
-            rows = cur.fetchall()
-            conn.close()
-        except Exception as e:
-            QMessageBox.critical(self, "DB Error", f"Failed to read DB: {e}")
+            # schedule on main thread
+            self.master.after(0, _do)
+        except Exception:
+            pass
+
+    def select_file(self):
+        file = filedialog.askopenfilename(title="Select file to ingest / preview")
+        if not file:
             return
+        self.selected_path = pathlib.Path(file)
+        self._show_preview(self.selected_path)
+        self._append_text(f"[GUI] Selected file: {self.selected_path}\n")
 
-        self.table.setRowCount(len(rows))
-        for r, row in enumerate(rows):
-            for c, val in enumerate(row):
-                item = QTableWidgetItem(str(val))
-                item.setFlags(item.flags() ^ Qt.ItemIsEditable)
-                self.table.setItem(r, c, item)
-
-        self.details.clear()
-        self.append_log(f"Loaded {len(rows)} records.")
-
-    def append_log(self, text):
-        self.details.append(text)
-
-    def on_selection_change(self):
-        sel = self.table.selectedItems()
-        if not sel:
+    def select_folder(self):
+        folder = filedialog.askdirectory(title="Select folder to ingest recursively")
+        if not folder:
             return
-        row = sel[0].row()
-        record_id = int(self.table.item(row, 0).text())
-        self.show_record_details(record_id)
+        self.selected_path = pathlib.Path(folder)
+        self.preview_label.config(text=f"Folder selected:\n{self.selected_path}")
+        self._append_text(f"[GUI] Selected folder: {self.selected_path}\n")
 
-    def show_record_details(self, record_id):
-        conn = self._connect()
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM vault_files WHERE id = ?", (record_id,))
-        rec = cur.fetchone()
-        conn.close()
-        if not rec:
-            self.details.setPlainText("Record not found.")
-            return
-        out = []
-        for k in rec.keys():
-            v = rec[k]
-            # convert bytes to base64 display if needed
-            if isinstance(v, (bytes, bytearray)):
-                import base64
-                v = f"<bytes, base64: {base64.b64encode(v).decode()[:32]}...>"
-            out.append(f"{k}: {v}")
-        self.details.setPlainText("\n".join(out))
-
-    def export_csv(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Save CSV", str(PROJECT_ROOT / "vault_export.csv"), "CSV files (*.csv)")
-        if not path:
-            return
+    def _show_preview(self, path: pathlib.Path):
+        # Try to open as image; if fails show basic info
         try:
-            conn = self._connect()
-            cur = conn.cursor()
-            cur.execute("SELECT * FROM vault_files")
-            rows = cur.fetchall()
-            cols = [d[0] for d in cur.description]
-            conn.close()
+            img = Image.open(path)
+            # generate thumbnail
+            img.thumbnail((400, 300))
+            self.preview_image = ImageTk.PhotoImage(img)
+            self.preview_label.config(image=self.preview_image, text="")
+        except Exception:
+            self.preview_image = None
+            self.preview_label.config(image="", text=f"Selected:\n{path.name}\n{path.stat().st_size} bytes")
 
-            with open(path, "w", newline='', encoding="utf-8") as f:
-                writer = csv.writer(f)
-                writer.writerow(cols)
-                for row in rows:
-                    # convert bytes to base64 for CSV
-                    newrow = []
-                    for v in row:
-                        if isinstance(v, (bytes, bytearray)):
-                            import base64
-                            newrow.append(base64.b64encode(v).decode("ascii"))
-                        else:
-                            newrow.append(v)
-                    writer.writerow(newrow)
-            QMessageBox.information(self, "Exported", f"CSV exported to {path}")
+    def ingest_prompt(self):
+        if not self.selected_path:
+            messagebox.showwarning("No selection", "Select a file or folder first.")
+            return
+        # ask passphrase masked
+        passphrase = simpledialog.askstring("Passphrase", "Enter passphrase for encryption:", show="*")
+        if passphrase is None:
+            return
+        # confirm
+        if not messagebox.askyesno("Confirm", f"Ingest {self.selected_path}?"):
+            return
+        # run ingest in background thread
+        t = threading.Thread(target=self._do_ingest, args=(str(self.selected_path), passphrase), daemon=True)
+        t.start()
+
+    def _do_ingest(self, path_str: str, passphrase: str):
+        try:
+            self._append_text(f"[GUI] Starting ingest for: {path_str}\n")
+            # orchestrator expects path and passphrase (string or bytes)
+            self.orch.ingest_path(path_str, passphrase)
+            self._append_text(f"[GUI] Ingest finished for: {path_str}\n")
+            messagebox.showinfo("Ingest finished", f"Ingest completed for:\n{path_str}\nCheck reports/ and DB for details.")
         except Exception as e:
-            QMessageBox.critical(self, "Export Error", str(e))
+            self._append_text(f"[GUI] Ingest error: {e}\n{traceback.format_exc()}\n")
+            messagebox.showerror("Ingest error", f"Ingest failed:\n{e}")
 
-    def export_selected_report(self):
-        sel = self.table.selectedItems()
-        if not sel:
-            QMessageBox.warning(self, "Select", "Select a row to export its JSON report.")
+    def restore_prompt(self):
+        # ask for ID and passphrase and out folder
+        rid = simpledialog.askinteger("Restore", "Enter record ID to restore (integer):")
+        if rid is None:
             return
-        row = sel[0].row()
-        record_id = int(self.table.item(row, 0).text())
-        # fetch fields from DB and prepare JSON
-        conn = self._connect()
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-        cur.execute("SELECT * FROM vault_files WHERE id = ?", (record_id,))
-        rec = cur.fetchone()
-        conn.close()
-        if not rec:
-            QMessageBox.warning(self, "Not found", "Record not found.")
+        passphrase = simpledialog.askstring("Passphrase", "Enter passphrase for decryption:", show="*")
+        if passphrase is None:
             return
-        payload = {}
-        for k in rec.keys():
-            v = rec[k]
-            if isinstance(v, (bytes, bytearray)):
-                import base64
-                v = base64.b64encode(v).decode("ascii")
-            payload[k] = v
-
-        path, _ = QFileDialog.getSaveFileName(self, "Save report JSON", str(PROJECT_ROOT / f"export_report_{record_id}.json"), "JSON files (*.json)")
-        if not path:
-            return
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2)
-        QMessageBox.information(self, "Saved", f"Report exported: {path}")
-
-    def restore_selected(self):
-        sel = self.table.selectedItems()
-        if not sel:
-            QMessageBox.warning(self, "Select", "Select a row to restore.")
-            return
-        row = sel[0].row()
-        record_id = int(self.table.item(row, 0).text())
-        out = QFileDialog.getExistingDirectory(self, "Choose restore folder", str(PROJECT_ROOT))
+        out = filedialog.askdirectory(title="Select output folder for restored file")
         if not out:
             return
-        # ask for passphrase
-        passphrase, ok = QInputDialog.getText(self, "Passphrase", "Enter passphrase:", QLineEdit.Password)
-        if not ok:
-            return
-        try:
-            self.orch.restore_id(record_id, passphrase, out)
-            QMessageBox.information(self, "Restored", f"Record {record_id} restored to {out}")
-        except Exception as e:
-            QMessageBox.critical(self, "Restore failed", str(e))
+        # run restore in background
+        t = threading.Thread(target=self._do_restore, args=(rid, passphrase, out), daemon=True)
+        t.start()
 
-    def delete_selected(self):
-        sel = self.table.selectedItems()
-        if not sel:
-            QMessageBox.warning(self, "Select", "Select a row to delete.")
-            return
-        row = sel[0].row()
-        record_id = int(self.table.item(row, 0).text())
-        confirm = QMessageBox.question(self, "Delete", f"Delete record {record_id}? This will remove DB entry and encrypted file (yes/no).", QMessageBox.Yes | QMessageBox.No)
-        if confirm != QMessageBox.Yes:
+    def _do_restore(self, rid: int, passphrase: str, out_folder: str):
+        try:
+            self._append_text(f"[GUI] Starting restore ID {rid} -> {out_folder}\n")
+            self.orch.restore_id(rid, passphrase, out_folder)
+            self._append_text(f"[GUI] Restore finished for ID {rid}\n")
+            messagebox.showinfo("Restore finished", f"Record {rid} restored to:\n{out_folder}")
+        except Exception as e:
+            self._append_text(f"[GUI] Restore error: {e}\n{traceback.format_exc()}\n")
+            messagebox.showerror("Restore error", f"Restore failed:\n{e}")
+
+    def open_reports(self):
+        # open reports folder in explorer (Windows)
+        import os
+        p = pathlib.Path("reports")
+        if not p.exists():
+            messagebox.showinfo("Reports", "No reports folder found.")
             return
         try:
-            # fetch encrypted filename, delete file
-            conn = self._connect()
-            cur = conn.cursor()
-            cur.execute("SELECT encrypted_name FROM vault_files WHERE id = ?", (record_id,))
-            res = cur.fetchone()
-            if res:
-                enc_name = res[0]
-                enc_path = (PROJECT_ROOT / "vault_store" / enc_name)
-                if enc_path.exists():
-                    enc_path.unlink()
-            # delete DB record
-            cur.execute("DELETE FROM vault_files WHERE id = ?", (record_id,))
-            conn.commit()
-            conn.close()
-            QMessageBox.information(self, "Deleted", f"Record {record_id} deleted.")
-            self.load_table()
-        except Exception as e:
-            QMessageBox.critical(self, "Delete failed", str(e))
+            os.startfile(p.resolve())
+        except Exception:
+            messagebox.showinfo("Reports", f"Reports folder: {p.resolve()}")
+
+    def on_close(self):
+        # restore stdout/stderr
+        sys.stdout = self._orig_stdout
+        sys.stderr = self._orig_stderr
+        self.master.destroy()
+
+
+def main():
+    root = tk.Tk()
+    # optional: set a minimum size
+    root.minsize(700, 520)
+    app = SecureVaultGUI(master=root)
+    root.protocol("WM_DELETE_WINDOW", app.on_close)
+    root.mainloop()
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    w = DBViewer()
-    w.show()
-    sys.exit(app.exec())
+    main()
