@@ -1,0 +1,9 @@
+{
+  "original": "D:\\Codes\\SecureVault\\examples\\sample.jpg",
+  "metadata_removed": [],
+  "original_sha256": "30d33432ea5a08a83b2c9833290aaf4103be055e4dcf368408cd68eab7a889c5",
+  "cleaned_sha256": "9105662121c01ffc0478078b0658601199d996554636e4c452275df6cf198b46",
+  "encrypted_sha256": "4757133b2a9ebdada24a9552a83e4af035d04f45089bae34a3c8af83ab02fef8",
+  "vault_path": "D:\\Codes\\SecureVault\\vault_store\\sample.jpg.vault",
+  "timestamp": "2025-11-17T18:08:20.458943Z",
+  "salt": 

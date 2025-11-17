@@ -3,7 +3,7 @@ from PIL import Image
 import piexif
 import os
 class Analyzer:
-    def hash_file(self,path chunk_size=8192):
+    def hash_file(self,path, chunk_size=8192):
         h=hashlib.sha256()
         with open(path, "rb") as f:
             for chunk in iter(lambda:f.read(chunk_size),b""):

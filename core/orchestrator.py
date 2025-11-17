@@ -1,14 +1,14 @@
-import os
 import pathlib
+import datetime
 from .analyzer import Analyzer
 from .cleaner import Cleaner
 from .crypto_engine import CryptoEngine
 from .storage_manager import StorageManager
 from .report_generator import ReportGenerator
-import datetime
 
 class Orchestrator:
     def __init__(self, db_path="vault.db"):
+        # Use StorageManager to handle absolute project-aware paths
         self.analyzer = Analyzer()
         self.cleaner = Cleaner()
         self.crypto = CryptoEngine()
@@ -50,15 +50,19 @@ class Orchestrator:
                 encrypted_sha256=enc_hash,
                 timestamp=timestamp
             )
-            self.reporter.generate_json_report(record_id, {
+            # prepare payload for report (make salt/nonce base64 for readability)
+            payload = {
                 "original": str(f),
                 "metadata_removed": list(metadata.keys()),
                 "original_sha256": orig_hash,
                 "cleaned_sha256": cleaned_hash,
                 "encrypted_sha256": enc_hash,
                 "vault_path": enc_path,
-                "timestamp": timestamp
-            })
+                "timestamp": timestamp,
+                "salt": salt,
+                "nonce": nonce
+            }
+            self.reporter.generate_json_report(record_id, payload)
             print(f"[+] Stored ID {record_id}")
 
     def restore_id(self, record_id, passphrase, out_folder):
@@ -70,6 +74,7 @@ class Orchestrator:
         with open(enc_path, "rb") as f:
             ct = f.read()
         try:
+            # stored salt & nonce are blobs in DB; sqlite3 returns bytes
             pt = self.crypto.decrypt_bytes(ct, passphrase.encode(), rec["salt"], rec["nonce"])
         except Exception as e:
             print("Decryption failed:", e)
