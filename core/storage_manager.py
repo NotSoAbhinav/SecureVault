@@ -7,9 +7,7 @@ from core.utils import resource_path, ensure_writable_db, user_data_dir
 
 class StorageManager:
     def __init__(self, db_path: str = None):
-        """
-        db_path: optional explicit path. If None, ensure_writable_db() will provide a per-user writable DB.
-        """
+        
         # If explicit path provided and exists as string, use it. Otherwise ensure a writable db.
         if db_path and Path(db_path).is_absolute():
             self.db_file = Path(db_path)
@@ -136,10 +134,7 @@ class StorageManager:
             conn.close()
 
     def get_encrypted_path(self, encrypted_name: str) -> str:
-        """
-        Search for an encrypted_name under the user vault_store and return absolute path if found.
-        This assumes save_encrypted_bytes saved it under user_data_dir()/vault_store.
-        """
+       
         vault_dir = user_data_dir() / "vault_store"
         candidate = vault_dir / encrypted_name
         if candidate.exists():

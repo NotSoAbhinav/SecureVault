@@ -3,11 +3,7 @@ from pathlib import Path
 import base64
 
 def _make_json_safe(obj):
-    """
-    Recursively convert bytes/bytearray and Path objects to JSON-serializable forms.
-    - bytes/bytearray -> base64 encoded str
-    - Path -> str
-    """
+    
     # bytes
     if isinstance(obj, (bytes, bytearray)):
         return base64.b64encode(obj).decode("ascii")

@@ -1,10 +1,3 @@
-# core/orchestrator.py
-"""
-Orchestrator: high-level glue that coordinates Analyzer, Cleaner, CryptoEngine,
-StorageManager and ReportGenerator to ingest files into the encrypted vault and
-to restore them by record id.
-"""
-
 from __future__ import annotations
 import pathlib
 import datetime
@@ -20,10 +13,7 @@ from .report_generator import ReportGenerator
 
 class Orchestrator:
     def __init__(self, db_path: str = "vault.db"):
-        """
-        Initialize subsystems. db_path may be a path string (absolute or relative)
-        or left as default to let StorageManager choose a writable DB location.
-        """
+        
         self.analyzer = Analyzer()
         self.cleaner = Cleaner()
         self.crypto = CryptoEngine()
@@ -31,10 +21,7 @@ class Orchestrator:
         self.reporter = ReportGenerator()
 
     def ingest_path(self, path: str | pathlib.Path, passphrase: bytes | str):
-        """
-        Ingest a file or directory. If directory, recurses and ingests all files.
-        passphrase may be bytes or str; str will be encoded as utf-8.
-        """
+       
         if isinstance(passphrase, str):
             passphrase_b = passphrase.encode()
         else:
@@ -117,10 +104,7 @@ class Orchestrator:
                 print(f"[!] Failed processing {f}: {e}")
 
     def restore_id(self, record_id: int, passphrase: bytes | str, out_folder: str | pathlib.Path):
-        """
-        Restore a record by id. Reads DB record, fetches encrypted file, decrypts with passphrase,
-        and writes plaintext to out_folder using original filename.
-        """
+        
         if isinstance(passphrase, str):
             passphrase_b = passphrase.encode()
         else:
