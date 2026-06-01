@@ -86,7 +86,7 @@ class StorageManager:
         try:
             c = conn.cursor()
             c.execute("""
-            CREATE TABLE IF NOT EXISTS records (
+            CREATE TABLE IF NOT EXISTS vault_files (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 original_name TEXT,
                 original_path TEXT,
@@ -100,7 +100,7 @@ class StorageManager:
             );
             """)
             c.execute("""
-            INSERT INTO records
+            INSERT INTO vault_files
             (original_name, original_path, encrypted_name, salt, nonce, original_sha256, cleaned_sha256, encrypted_sha256, timestamp)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
@@ -125,7 +125,7 @@ class StorageManager:
         conn.row_factory = sqlite3.Row
         try:
             c = conn.cursor()
-            c.execute("SELECT * FROM records WHERE id = ?", (record_id,))
+            c.execute("SELECT * FROM vault_files WHERE id = ?", (record_id,))
             row = c.fetchone()
             if not row:
                 return None

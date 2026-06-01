@@ -1,7 +1,8 @@
 import sqlite3
 from tabulate import tabulate
+from core.utils import user_data_dir
 
-DB_PATH = r"D:\Codes\SecureVault\vault.db"
+DB_PATH = user_data_dir() / "vault.db"
 
 def main():
     try:

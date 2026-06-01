@@ -66,7 +66,7 @@ class Orchestrator:
                 enc_hash = self.analyzer.hash_file(pathlib.Path(enc_path))
 
                 # timestamp in UTC (ISO 8601 with Z)
-                timestamp = datetime.datetime.utcnow().isoformat() + "Z"
+                timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat().replace("+00:00", "Z")
 
                 # insert DB record (salt & nonce stored as raw bytes/BLOB)
                 record_id = self.storage.insert_record(

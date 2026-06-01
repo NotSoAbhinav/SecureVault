@@ -1,11 +1,19 @@
 {
-  "original": "D:\\Codes\\SecureVault\\examples\\sample.jpg",
-  "metadata_removed": [],
-  "original_sha256": "cf0b8f5d55a8fc762bcbcabed281d3060faf73d82e5c28f72257659749391285",
-  "cleaned_sha256": "78be81e9f1238a74cc60b38694caf271df862a7e0b1570a192ddd5a7a65a5d4d",
-  "encrypted_sha256": "f5f73f49a6d664c66a88fe287f270aacc9f0fe3eb7a8ff738495f8fe035a83f7",
-  "vault_path": "C:\\Users\\abhin\\AppData\\Local\\SecureVault\\SecureVault\\vault_store\\sample.jpg.vault",
-  "timestamp": "2025-11-17T19:56:10.551749Z",
-  "salt": "vJ6KiDMmu+eFIssS5QEQGA==",
-  "nonce": "lsTtOGC0galeeRr0"
+  "original": "C:\\Users\\abhin\\AppData\\Local\\Temp\\pytest-of-ADMIN\\pytest-2\\test_orchestrator_end_to_end0\\test_doc.pdf",
+  "metadata_removed": [
+    "PDF_info:/Author",
+    "PDF_info:/Producer",
+    "PDF_info:/Title",
+    "PDF_xmp:{http://purl.org/dc/elements/1.1/}title",
+    "PDF_xmp:{http://ns.adobe.com/xap/1.0/}MetadataDate",
+    "PDF_xmp:{http://ns.adobe.com/pdf/1.3/}Producer",
+    "PDF_xmp:{http://purl.org/dc/elements/1.1/}creator"
+  ],
+  "original_sha256": "21fa63e81704fbad79be595945202315e39d70495cdca0b71aa03d108e5ccca7",
+  "cleaned_sha256": "399345dc1442ae5ac5bf77cf9dd4bd6c1a19b9baa432ea0d66520d485b3977fb",
+  "encrypted_sha256": "b251b5e646b3137ce311bd837ce3bdeddae87867444a283926f1f77bfdde71ce",
+  "vault_path": "C:\\Users\\abhin\\AppData\\Local\\SecureVault\\SecureVault\\vault_store\\test_doc.pdf_2.vault",
+  "timestamp": "2026-05-29T17:49:42.379505Z",
+  "salt": "JIORqIYVNwagFnPA3L7O+A==",
+  "nonce": "+XRhRTR3lFOT6pLn"
 }
