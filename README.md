@@ -1,73 +1,122 @@
-# Secure File Vault — Encryption & Metadata Removal
+# Secure File Vault (SecureVault)
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://python.org)
 [![Platform](https://img.shields.io/badge/platform-windows%20%7C%20linux%20%7C%20macos-lightgrey.svg)](#usage)
-[![Encryption](https://img.shields.io/badge/encryption-AES--256--GCM-green.svg)](#features)
-[![Metadata Stripping](https://img.shields.io/badge/metadata-stripped-success.svg)](#features)
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](#running-tests)
+[![Encryption](https://img.shields.io/badge/encryption-AES--256--GCM-green.svg)](#security-specifications)
+[![Metadata Stripping](https://img.shields.io/badge/metadata-stripped-success.svg)](#metadata-cleaning-details)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](#automated-testing)
 
-A secure desktop tool that strips hidden metadata (EXIF, author, timestamps, etc.) from files, encrypts them using AES-256-GCM, stores them in a local vault, and generates tamper-evident JSON forensic reports.
+SecureVault is a high-integrity desktop application designed to counter metadata privacy leaks. It automatically parses files (Images, PDFs, DOCX), detects and strips identifying metadata, encrypts the sanitized payloads using AES-256-GCM, and archives them securely. 
 
-## Features
-- **Batch File Ingestion:** Process files individually or recursively scan entire directories.
-- **Metadata Detection & Preview:** Inspect metadata fields for JPEG/PNG images, PDFs, and DOCX documents before encryption.
-- **Comprehensive Metadata Stripping:** 
-  * **Images (JPEG/PNG):** Purges all EXIF tags.
-  * **PDFs:** Clears document info keys, XMP metadata streams, and document identifiers.
-  * **DOCX:** Safely rewrites ZIP archive metadata files (`core.xml`, `app.xml`) to remove identifying information.
-- **Strong Encryption:** Cryptographically derives keys using PBKDF2 (200,000 iterations of SHA-256) and encrypts payloads with AES-256-GCM.
-- **Integrity Verification:** Uses SHA-256 hashes to guarantee data integrity before and after extraction.
-- **SQLite Database Index:** Automatically records details, original paths, file hashes, and timestamps in a local SQLite index.
-- **JSON Audit Reports:** Generates verification reports containing hashing audits and metadata history for every vault insertion.
-- **Dual Interface:** Fully functional command-line prototype and Tkinter desktop GUI.
+Every ingestion creates a local database record and a tamper-evident audit report containing SHA-256 cryptographic hashes for forensic validation.
 
-## Tech Stack
-- **Python 3.10+**
-- **cryptography** (AES-256-GCM encryption & PBKDF2 key derivation)
-- **Pillow** & **piexif** (Image manipulation and EXIF stripping)
-- **pikepdf** (PDF processing and metadata clearance)
-- **sqlite3** (Local storage database engine)
-- **pytest** (Test execution framework)
+---
 
-## Installation
+## 🏗️ Architecture & Workflow
 
-1. Ensure Python 3.10+ is installed on your system.
+```mermaid
+graph TD
+    A[Source File] --> B(Metadata Analyzer)
+    B -->|Extract Metadata| C(Metadata Cleaner)
+    C -->|Strip & Sanitize| D[Cleaned Bytes]
+    D --> E(Crypto Engine)
+    E -->|AES-256-GCM + PBKDF2| F[Encrypted Vault Payload]
+    F --> G(Storage Manager)
+    G -->|Store Payload| H[(Vault Store)]
+    G -->|Insert Record| I[(SQLite DB)]
+    G -->|Generate Audit| J[JSON Report]
+```
+
+---
+
+## ✨ Features
+
+- **Batch & Recursive File Processing:** Ingest single files or scan entire directories recursively.
+- **Selective Metadata Extraction & Stripping:**
+  - **Images (JPEG, PNG):** Removes all EXIF metadata tags.
+  - **PDFs:** Purges document info fields (Author, Creator, Title, etc.), XMP metadata streams, and unique document IDs.
+  - **DOCX:** Deconstructs the document ZIP archive, rewrites the core metadata XML files (`core.xml` and `app.xml`) with neutral, empty templates, and rebuilds the container safely.
+- **Strong Cryptographic Protection:** Derives master keys dynamically via PBKDF2 with 200,000 iterations of SHA-256 and encrypts payloads with authenticated AES-256-GCM.
+- **Data Integrity & Auditability:** Generates SHA-256 checksums at every phase (original, stripped, and encrypted) and writes them to a local JSON verification audit report.
+- **Unified Interfaces:** Offers both a graphical user interface (Tkinter desktop app) and a command-line interface.
+
+---
+
+## 🔒 Security Specifications
+
+| Attribute | Implementation Standard | Details |
+| :--- | :--- | :--- |
+| **Encryption Algorithm** | AES-256-GCM | Authenticated symmetric encryption with a 96-bit random nonce |
+| **Key Derivation (KDF)** | PBKDF2HMAC | 200,000 hashing iterations using SHA-256 and a random 128-bit salt |
+| **Integrity Checks** | SHA-256 | Cryptographic verification of original, stripped, and ciphered bytes |
+| **Storage Separation** | Vault Directory | Encrypted payloads are archived separately; salts & nonces are stored as DB blobs |
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Python 3.10 or higher
+- Pip (Python Package Installer)
+
+### Installation
+1. Clone or download the repository contents to a local workspace.
 2. Install the required dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-## Usage
+---
 
-### 🖥️ Desktop GUI Prototype
-Launch the graphical user interface to easily ingest/preview files, decrypt records, and browse reports:
+## 🛠️ Usage
+
+### 🖥️ Desktop GUI Interface
+Launch the graphical UI for visual file selection, real-time metadata previews, and simple restoration:
 ```bash
 python gui_app.py
 ```
 
 ### 💻 Command Line Interface (CLI)
 
-#### Ingest a File or Folder
-Cleans metadata, encrypts, and stores the file:
+#### 1. Ingest / Secure a File
+Strips the metadata, encrypts the file, and registers it in the local database:
 ```bash
-python app.py ingest --path examples/sample.JPG --passphrase mysecurepassphrase
+python app.py ingest --path <file_or_folder_path> --passphrase <your_passphrase>
+```
+*Example:*
+```bash
+python app.py ingest --path examples/sample.JPG --passphrase "SuperSecretPassword123"
 ```
 
-#### Restore / Decrypt a File
-Decrypts the vault record by its database ID and restores it to a target output folder:
+#### 2. Restore / Decrypt a File
+Decrypts the secured payload by its unique database record ID and exports the clean file:
 ```bash
-python app.py restore --id 1 --passphrase mysecurepassphrase --out restored_files
+python app.py restore --id <record_id> --passphrase <your_passphrase> --out <output_directory>
+```
+*Example:*
+```bash
+python app.py restore --id 1 --passphrase "SuperSecretPassword123" --out restored_files
 ```
 
-### 🗃️ View Database Entries
-Inspect the SQLite database records in a neat tabular grid:
+#### 3. View Ingested History
+View vault logs, original names, and timestamps formatted in a command-line table:
 ```bash
 python view_db.py
 ```
 
-## Running Tests
-Run the test suite using `pytest` to verify key derivation, metadata extraction, stripping algorithms, database persistence, and end-to-end integration:
+---
+
+## 🧪 Automated Testing
+
+SecureVault features an automated test suite that validates the complete lifecycles of encryption, decryption, metadata removal, and database mapping.
+
+Run the test suite using `pytest`:
 ```bash
 python -m pytest tests/
 ```
+
+---
+
+## 📄 License
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.
