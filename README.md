@@ -11,24 +11,7 @@ SecureVault is a high-integrity desktop application designed to counter metadata
 
 Every ingestion creates a local database record and a tamper-evident audit report containing SHA-256 cryptographic hashes for forensic validation.
 
----
 
-## 🏗️ Architecture & Workflow
-
-```mermaid
-graph TD
-    A[Source File] --> B(Metadata Analyzer)
-    B -->|Extract Metadata| C(Metadata Cleaner)
-    C -->|Strip & Sanitize| D[Cleaned Bytes]
-    D --> E(Crypto Engine)
-    E -->|AES-256-GCM + PBKDF2| F[Encrypted Vault Payload]
-    F --> G(Storage Manager)
-    G -->|Store Payload| H[(Vault Store)]
-    G -->|Insert Record| I[(SQLite DB)]
-    G -->|Generate Audit| J[JSON Report]
-```
-
----
 
 ## ✨ Features
 
